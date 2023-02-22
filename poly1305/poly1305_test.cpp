@@ -234,18 +234,31 @@ int main()
     bool all_test_is_passed = true;
     for (auto&& tv : test_vectors)
     {
-        auto result = poly1305::calculate_poly1305(
-            reinterpret_cast<const poly1305::key_r*>(tv.key.data() + 0),
-            reinterpret_cast<const poly1305::key_s*>(tv.key.data() + 16),
-            tv.text.data(), tv.text.size());
-
-        if (!std::equal(
-            tv.tag.begin(),
-            tv.tag.end(),
-            result.begin(),
-            result.end()))
+        if (auto result = poly1305::calculate_poly1305_x64(
+                reinterpret_cast<const poly1305::key_r*>(tv.key.data() + 0),
+                reinterpret_cast<const poly1305::key_s*>(tv.key.data() + 16),
+                tv.text.data(), tv.text.size());
+            !std::equal(
+                tv.tag.begin(),
+                tv.tag.end(),
+                result.begin(),
+                result.end()))
         {
-            std::cerr << "TEST [" << tv.name << "] FAILED" << "\n";
+            std::cerr << "TEST(x64) [" << tv.name << "] FAILED" << "\n";
+            all_test_is_passed = false;
+        }
+
+        if (auto result = poly1305::calculate_poly1305_x86(
+                reinterpret_cast<const poly1305::key_r*>(tv.key.data() + 0),
+                reinterpret_cast<const poly1305::key_s*>(tv.key.data() + 16),
+                tv.text.data(), tv.text.size());
+            !std::equal(
+                tv.tag.begin(),
+                tv.tag.end(),
+                result.begin(),
+                result.end()))
+        {
+            std::cerr << "TEST(x86) [" << tv.name << "] FAILED" << "\n";
             all_test_is_passed = false;
         }
     }
