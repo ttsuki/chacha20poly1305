@@ -7,6 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "poly1305", "poly1305\poly13
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "poly1305_test", "poly1305\poly1305_test.vcxproj", "{598B9BAD-E3D9-4964-82D2-745FCA9B105D}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "chacha20", "chacha20\chacha20.vcxitems", "{D9B01530-0D48-4BF4-83DB-E214FC6CD4AF}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "chacha20_test", "chacha20\chacha20_test.vcxproj", "{730D510D-F25D-41AC-B93D-7E1B9817694E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -23,6 +27,14 @@ Global
 		{598B9BAD-E3D9-4964-82D2-745FCA9B105D}.Release|x64.Build.0 = Release|x64
 		{598B9BAD-E3D9-4964-82D2-745FCA9B105D}.Release|x86.ActiveCfg = Release|Win32
 		{598B9BAD-E3D9-4964-82D2-745FCA9B105D}.Release|x86.Build.0 = Release|Win32
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Debug|x64.ActiveCfg = Debug|x64
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Debug|x64.Build.0 = Debug|x64
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Debug|x86.ActiveCfg = Debug|Win32
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Debug|x86.Build.0 = Debug|Win32
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Release|x64.ActiveCfg = Release|x64
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Release|x64.Build.0 = Release|x64
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Release|x86.ActiveCfg = Release|Win32
+		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -32,6 +44,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		poly1305\poly1305.vcxitems*{598b9bad-e3d9-4964-82d2-745fca9b105d}*SharedItemsImports = 4
+		chacha20\chacha20.vcxitems*{730d510d-f25d-41ac-b93d-7e1b9817694e}*SharedItemsImports = 4
 		poly1305\poly1305.vcxitems*{865de0d2-c0ba-46b8-9c9a-613ce0df6bf1}*SharedItemsImports = 9
+		chacha20\chacha20.vcxitems*{d9b01530-0d48-4bf4-83db-e214fc6cd4af}*SharedItemsImports = 9
 	EndGlobalSection
 EndGlobal
