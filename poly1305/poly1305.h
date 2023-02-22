@@ -373,19 +373,21 @@ namespace poly1305
     {
         using namespace intrinsics;
         std::array<uint64_t, 3> a{};
-        std::array<uint64_t, 2> r = load_u<std::array<uint64_t, 2>>(r_);
-        std::array<uint64_t, 2> s = load_u<std::array<uint64_t, 2>>(s_);
-        r[0] &= 0x0FFFFFFC0FFFFFFFu;
-        r[1] &= 0x0FFFFFFC0FFFFFFCu;
+        constexpr auto adc130 = [](std::array<uint64_t, 3>& a, uint128_t b, uint64_t pad = 0)
+        {
+            uint8_t cf = 0;
+            cf = adc64(cf, a[0], b.l);
+            cf = adc64(cf, a[1], b.h);
+            return adc64(cf, a[2], pad);
+        };
+
+        const uint128_t r = load_u<uint128_t>(r_) & uint128_t{0x0FFFFFFC0FFFFFFFu, 0x0FFFFFFC0FFFFFFCu};
 
         while (length)
         {
-            std::array<uint64_t, 3> in{};
             if (length >= 16)
             {
-                in[0] = load_u<uint64_t>(message + 0);
-                in[1] = load_u<uint64_t>(message + 8);
-                in[2] = 1;
+                adc130(a, load_u<uint128_t>(message), 1);
                 message += 16;
                 length -= 16;
             }
@@ -395,89 +397,50 @@ namespace poly1305
                 std::memcpy(t.data(), message, length);
                 t[length] = 1;
 
-                in[0] = load_u<uint64_t>(t.data() + 0);
-                in[1] = load_u<uint64_t>(t.data() + 8);
-                in[2] = 0;
+                adc130(a, load_u<uint128_t>(t.data()), 0);
                 message += length;
                 length -= length;
             }
 
-            {
-                uint8_t cf = 0;
-                cf = adc64(cf, a[0], in[0]);
-                cf = adc64(cf, a[1], in[1]);
-                cf = adc64(cf, a[2], in[2]);
-                (void)cf;
-            }
-
             std::array<uint128_t, 4> d{};
-            d[0] += mul64(a[0], r[0]);
-            d[1] += mul64(a[0], r[1]);
-            d[1] += mul64(a[1], r[0]);
-            d[2] += mul64(a[1], r[1]);
-            d[2] += mul64(a[2], r[0]);
-            d[3] += mul64(a[2], r[1]);
+            d[0] += mul64(a[0], r.l);
+            d[1] += mul64(a[0], r.h);
+            d[1] += mul64(a[1], r.l);
+            d[2] += mul64(a[1], r.h);
+            d[2] += mul64(a[2], r.l);
+            d[3] += mul64(a[2], r.h);
 
-            std::array<uint64_t, 4> e{};
-            e[0] = (d[0]).l;
-            e[1] = (d[1] += uint128_t{d[0].h, 0}).l;
-            e[2] = (d[2] += uint128_t{d[1].h, 0}).l;
-            e[3] = (d[3] += uint128_t{d[2].h, 0}).l;
+            std::array<uint128_t, 2> e{};
+            e[0].l = (d[0]).l;
+            e[0].h = (d[1] += uint128_t{d[0].h}).l;
+            e[1].l = (d[2] += uint128_t{d[1].h}).l;
+            e[1].h = (d[3] += uint128_t{d[2].h}).l;
 
-            a[0] = e[0];
-            a[1] = e[1];
-            a[2] = e[2] & 3;
-
-            {
-                uint8_t cf = 0;
-                cf = adc64(cf, a[0], shrd64(e[2], e[3], 2));
-                cf = adc64(cf, a[1], (e[3] >> 2));
-                a[2] += cf;
-            }
-
-            {
-                uint8_t cf = 0;
-                cf = adc64(cf, a[0], e[2] & ~3);
-                cf = adc64(cf, a[1], e[3]);
-                a[2] += cf;
-            }
+            a[0] = e[0].l;
+            a[1] = e[0].h;
+            a[2] = e[1].l & 3;
+            adc130(a, e[1] >> 2);
+            adc130(a, e[1] & ~uint128_t{3});
         }
 
         while (a[2] >= 4)
         {
-            auto t = a[2];
-            a[2] &= 3;
-            {
-                uint8_t cf = 0;
-                cf = adc64(cf, a[0], t >> 2);
-                cf = adc64(cf, a[1], 0);
-                a[2] += cf;
-            }
-
-            {
-                uint8_t cf = 0;
-                cf = adc64(cf, a[0], t & ~3);
-                cf = adc64(cf, a[1], 0);
-                a[2] += cf;
-            }
+            auto t = std::exchange(a[2], a[2] & 3);
+            adc130(a, t >> 2);
+            adc130(a, t & ~3);
         }
 
-        if (std::tie(a[2], a[1], a[0])
-            >= std::make_tuple(3u, 0xFFFFFFFFFFFFFFFFu, 0xFFFFFFFFFFFFFFFBu))
+        if (constexpr std::array<uint64_t, 3> prime1305 = {0xFFFFFFFFFFFFFFFBu, 0xFFFFFFFFFFFFFFFFu, 3u};
+            std::tie(a[2], a[1], a[0]) >= std::tie(prime1305[2], prime1305[1], prime1305[0]))
         {
-            a[2] -= 3u;
-            a[1] -= 0xFFFFFFFFFFFFFFFFu;
-            a[0] -= 0xFFFFFFFFFFFFFFFBu;
+            uint8_t bf = 0;
+            bf = sbb64(bf, a[0], prime1305[0]);
+            bf = sbb64(bf, a[1], prime1305[1]);
+            (void)sbb64(bf, a[2], prime1305[2]);
         }
 
-        {
-            uint8_t cf = 0;
-            cf = adc64(cf, a[0], s[0]);
-            cf = adc64(cf, a[1], s[1]);
-            a[2] += cf;
-        }
-
-        return intrinsics::load_u<mac>(a.data());
+        adc130(a, load_u<uint128_t>(s_));
+        return load_u<mac>(a.data());
     }
 
     static inline mac calculate_poly1305(
