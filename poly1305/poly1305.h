@@ -55,7 +55,7 @@ namespace poly1305
         }
     }
 
-    static mac calculate_poly1305(
+    static mac calculate_poly1305_x86(
         const key_r* r_,
         const key_s* s_,
         const byte* message,
@@ -208,5 +208,287 @@ namespace poly1305
             a[4] += cf;
         }
         return intrinsics::load_u<mac>(a.data());
+    }
+
+    namespace intrinsics
+    {
+        static inline constexpr std::array<uint32_t, 2> decompose64(uint64_t v) noexcept
+        {
+            return std::array<uint32_t, 2>{static_cast<uint32_t>(v), static_cast<uint32_t>(v >> 32)};
+        }
+
+        static inline uint8_t adc64(uint8_t cf, uint64_t& a, uint64_t b) noexcept
+        {
+#if (defined(_MSC_VER) && _MSC_VER >= 1920 && defined(_M_X64)) || defined(__x86_64__)
+            // 64bit MSVC(2019 or later: VS2017 has bug?), GCC, clang
+            static_assert(sizeof(uint64_t) == sizeof(unsigned long long));
+            return _addcarry_u64(cf, a, b, reinterpret_cast<unsigned long long*>(&a));
+#else
+            uint32_t l32 = static_cast<uint32_t>(a), h32 = static_cast<uint32_t>(a >> 32);
+            cf = adc32(cf, l32, static_cast<uint32_t>(b));
+            cf = adc32(cf, h32, static_cast<uint32_t>(b >> 32));
+            a = static_cast<uint64_t>(h32) << 32 | l32;
+            return cf;
+#endif
+        }
+
+        static inline uint8_t sbb64(uint8_t cf, uint64_t& a, uint64_t b) noexcept
+        {
+#if (defined(_MSC_VER) && _MSC_VER >= 1920 && defined(_M_X64)) || defined(__x86_64__)
+            // 64bit MSVC(2019 or later: VS2017 has bug?), GCC, clang
+            static_assert(sizeof(uint64_t) == sizeof(unsigned long long));
+            return _subborrow_u64(cf, a, b, reinterpret_cast<unsigned long long*>(&a));
+#else
+            uint32_t l32 = static_cast<uint32_t>(a), h32 = static_cast<uint32_t>(a >> 32);
+            cf = sbb32(cf, l32, static_cast<uint32_t>(b));
+            cf = sbb32(cf, h32, static_cast<uint32_t>(b >> 32));
+            a = static_cast<uint64_t>(h32) << 32 | l32;
+            return cf;
+#endif
+        }
+
+        static inline uint64_t muld64(uint64_t a, uint64_t b, uint64_t* h) noexcept
+        {
+#if defined(_MSC_VER) && defined(_M_X64)
+            // 64bit MSVC
+            return _umul128(a, b, h);
+#elif defined(__SIZEOF_INT128__)
+            auto ab = static_cast<unsigned __int128>(a) * b;
+            *h = static_cast<uint64_t>(ab >> 64);
+            return static_cast<uint64_t>(ab);
+#else
+            auto [al, ah] = decompose64(a);
+            auto [bl, bh] = decompose64(b);
+
+            auto [ll, lh] = decompose64(mul32(al, bl)); // ___a * ___b = __ll
+            auto [xl, xh] = decompose64(mul32(ah, bl)); // __a_ * ___b = _xx_
+            auto [yl, yh] = decompose64(mul32(al, bh)); // ___a * __b_ = _yy_
+            auto [hl, hh] = decompose64(mul32(ah, bh)); // __a_ * __b_ = hh__
+
+            hh += adc32(adc32(0, lh, xl), hl, xh);
+            hh += adc32(adc32(0, lh, yl), hl, yh);
+
+            *h = static_cast<uint64_t>(hh) << 32 | hl;
+            return static_cast<uint64_t>(lh) << 32 | ll;
+#endif
+        }
+
+        static inline uint64_t shld64(uint64_t l, uint64_t h, int i) noexcept
+        {
+#if defined(_MSC_VER) && defined(_M_X64)
+            // 64bit MSVC
+            return __shiftleft128(l, h, static_cast<unsigned char>(i));
+#else
+            return (i & 63) ? h << (i & 63) | l >> (-i & 63) : h;
+#endif
+        }
+
+        static inline uint64_t shrd64(uint64_t l, uint64_t h, int i) noexcept
+        {
+#if defined(_MSC_VER) && defined(_M_X64)
+            // 64bit MSVC
+            return __shiftright128(l, h, static_cast<unsigned char>(i));
+#else
+            return (i & 63) ? l >> (i & 63) | h << (-i & 63) : l;
+#endif
+        }
+
+        struct uint128_t
+        {
+            uint64_t l{}, h{};
+            inline constexpr uint128_t() = default;
+            inline constexpr uint128_t(uint64_t l, uint64_t h = {}) : l{l}, h{h} { }
+            inline constexpr explicit operator bool() const noexcept { return l | h; }
+            inline constexpr explicit operator uint64_t() const noexcept { return l; }
+        };
+
+        static inline bool operator ==(uint128_t a, uint128_t b) noexcept { return !((a.h ^ b.h) | (a.l ^ b.l)); }
+        static inline bool operator !=(uint128_t a, uint128_t b) noexcept { return !(a == b); }
+        static inline bool operator <(uint128_t a, uint128_t b) noexcept { return intrinsics::sbb64(a.l < b.l, a.h, b.h); }
+        static inline bool operator >(uint128_t a, uint128_t b) noexcept { return b < a; }
+        static inline bool operator <=(uint128_t a, uint128_t b) noexcept { return !(a > b); }
+        static inline bool operator >=(uint128_t a, uint128_t b) noexcept { return !(a < b); }
+
+        static inline uint128_t operator +(uint128_t a, uint128_t b) noexcept
+        {
+            a.h += b.h + adc64(0, a.l, b.l);
+            return a;
+        }
+
+        static inline uint128_t operator -(uint128_t a, uint128_t b) noexcept
+        {
+            a.h -= b.h + sbb64(0, a.l, b.l);
+            return a;
+        }
+
+        static inline uint128_t operator *(uint128_t a, uint128_t b) noexcept
+        {
+            uint64_t h;
+            uint64_t l = muld64(a.l, b.l, &h);
+            h += a.l * b.h + a.h * b.l;
+            return {l, h};
+        }
+
+        static inline uint128_t operator ~(uint128_t a) noexcept { return {~a.l, ~a.h}; }
+        static inline uint128_t operator &(uint128_t a, uint128_t b) noexcept { return {a.l & b.l, a.h & b.h}; }
+        static inline uint128_t operator |(uint128_t a, uint128_t b) noexcept { return {a.l | b.l, a.h | b.h}; }
+        static inline uint128_t operator ^(uint128_t a, uint128_t b) noexcept { return {a.l ^ b.l, a.h ^ b.h}; }
+
+        static inline uint128_t operator <<(uint128_t a, int i) noexcept
+        {
+            uint64_t l = a.l << (i & 63);
+            uint64_t h = shld64(a.l, a.h, static_cast<unsigned char>(i));
+            return i & 64 ? uint128_t{0, l} : uint128_t{l, h};
+        }
+
+        static inline uint128_t operator >>(uint128_t a, int i) noexcept
+        {
+            uint64_t l = shrd64(a.l, a.h, static_cast<unsigned char>(i));
+            uint64_t h = a.h >> (i & 63);
+            return i & 64 ? uint128_t{h, 0} : uint128_t{l, h};
+        }
+
+        static inline uint128_t& operator +=(uint128_t& a, uint128_t b) noexcept { return a = a + b; }
+        static inline uint128_t& operator -=(uint128_t& a, uint128_t b) noexcept { return a = a - b; }
+        static inline uint128_t& operator *=(uint128_t& a, uint128_t b) noexcept { return a = a * b; }
+        static inline uint128_t& operator &=(uint128_t& a, uint128_t b) noexcept { return a = a & b; }
+        static inline uint128_t& operator |=(uint128_t& a, uint128_t b) noexcept { return a = a | b; }
+        static inline uint128_t& operator ^=(uint128_t& a, uint128_t b) noexcept { return a = a ^ b; }
+        static inline uint128_t& operator <<=(uint128_t& a, int b) noexcept { return a = a << b; }
+        static inline uint128_t& operator >>=(uint128_t& a, int b) noexcept { return a = a << b; }
+
+        static inline uint128_t mul64(uint64_t a, uint64_t b) noexcept
+        {
+            uint128_t ret{};
+            ret.l = muld64(a, b, &ret.h);
+            return ret;
+        }
+    }
+
+    static mac calculate_poly1305_x64(
+        const key_r* r_,
+        const key_s* s_,
+        const byte* message,
+        size_t length)
+    {
+        using namespace intrinsics;
+        std::array<uint64_t, 3> a{};
+        std::array<uint64_t, 2> r = load_u<std::array<uint64_t, 2>>(r_);
+        std::array<uint64_t, 2> s = load_u<std::array<uint64_t, 2>>(s_);
+        r[0] &= 0x0FFFFFFC0FFFFFFFu;
+        r[1] &= 0x0FFFFFFC0FFFFFFCu;
+
+        while (length)
+        {
+            std::array<uint64_t, 3> in{};
+            if (length >= 16)
+            {
+                in[0] = load_u<uint64_t>(message + 0);
+                in[1] = load_u<uint64_t>(message + 8);
+                in[2] = 1;
+                message += 16;
+                length -= 16;
+            }
+            else
+            {
+                std::array<byte, 16> t{};
+                std::memcpy(t.data(), message, length);
+                t[length] = 1;
+
+                in[0] = load_u<uint64_t>(t.data() + 0);
+                in[1] = load_u<uint64_t>(t.data() + 8);
+                in[2] = 0;
+                message += length;
+                length -= length;
+            }
+
+            {
+                uint8_t cf = 0;
+                cf = adc64(cf, a[0], in[0]);
+                cf = adc64(cf, a[1], in[1]);
+                cf = adc64(cf, a[2], in[2]);
+                (void)cf;
+            }
+
+            std::array<uint128_t, 4> d{};
+            d[0] += mul64(a[0], r[0]);
+            d[1] += mul64(a[0], r[1]);
+            d[1] += mul64(a[1], r[0]);
+            d[2] += mul64(a[1], r[1]);
+            d[2] += mul64(a[2], r[0]);
+            d[3] += mul64(a[2], r[1]);
+
+            std::array<uint64_t, 4> e{};
+            e[0] = (d[0]).l;
+            e[1] = (d[1] += uint128_t{d[0].h, 0}).l;
+            e[2] = (d[2] += uint128_t{d[1].h, 0}).l;
+            e[3] = (d[3] += uint128_t{d[2].h, 0}).l;
+
+            a[0] = e[0];
+            a[1] = e[1];
+            a[2] = e[2] & 3;
+
+            {
+                uint8_t cf = 0;
+                cf = adc64(cf, a[0], shrd64(e[2], e[3], 2));
+                cf = adc64(cf, a[1], (e[3] >> 2));
+                a[2] += cf;
+            }
+
+            {
+                uint8_t cf = 0;
+                cf = adc64(cf, a[0], e[2] & ~3);
+                cf = adc64(cf, a[1], e[3]);
+                a[2] += cf;
+            }
+        }
+
+        while (a[2] >= 4)
+        {
+            auto t = a[2];
+            a[2] &= 3;
+            {
+                uint8_t cf = 0;
+                cf = adc64(cf, a[0], t >> 2);
+                cf = adc64(cf, a[1], 0);
+                a[2] += cf;
+            }
+
+            {
+                uint8_t cf = 0;
+                cf = adc64(cf, a[0], t & ~3);
+                cf = adc64(cf, a[1], 0);
+                a[2] += cf;
+            }
+        }
+
+        if (std::tie(a[2], a[1], a[0])
+            >= std::make_tuple(3u, 0xFFFFFFFFFFFFFFFFu, 0xFFFFFFFFFFFFFFFBu))
+        {
+            a[2] -= 3u;
+            a[1] -= 0xFFFFFFFFFFFFFFFFu;
+            a[0] -= 0xFFFFFFFFFFFFFFFBu;
+        }
+
+        {
+            uint8_t cf = 0;
+            cf = adc64(cf, a[0], s[0]);
+            cf = adc64(cf, a[1], s[1]);
+            a[2] += cf;
+        }
+
+        return intrinsics::load_u<mac>(a.data());
+    }
+
+    static inline mac calculate_poly1305(
+        const key_r* r_,
+        const key_s* s_,
+        const byte* message,
+        size_t length)
+    {
+        if constexpr (sizeof(void*) == 8)
+            return calculate_poly1305_x64(r_, s_, message, length);
+        else
+            return calculate_poly1305_x86(r_, s_, message, length);
     }
 }
