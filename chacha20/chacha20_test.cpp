@@ -253,10 +253,13 @@ int main()
     bool all_test_is_passed = true;
     for (auto&& tv : block_function_test_vectors)
     {
-        if (auto result = chacha20::make_key_stream(
+        using key_stream = std::array<byte, 64>;
+        key_stream result{};
+
+        if (chacha20::process_stream(
                 reinterpret_cast<const chacha20::key*>(tv.key.data()),
                 reinterpret_cast<const chacha20::nonce*>(tv.nonce.data()),
-                tv.block_counter);
+                &result, &result, sizeof(result) * tv.block_counter, sizeof(result));
             std::memcmp(result.data(), tv.stream.data(), 64) != 0)
         {
             std::cerr << "BLOCK FUNCTION TEST [" << tv.name << "] FAILED" << "\n";
