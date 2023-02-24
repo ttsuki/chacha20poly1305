@@ -62,18 +62,37 @@ namespace chacha20
         template <class context_t, class block_t>
         static void process_stream(context_t& ctx, const void* input, void* output, size_t position, size_t length)
         {
-            while (length)
-            {
-                constexpr size_t block_size = sizeof(block_t);
-                uint32_t bi = static_cast<uint32_t>(position / block_size);
-                size_t pad = position % block_size;
-                size_t len = std::min(length, block_size - pad);
+            constexpr size_t block_size = sizeof(block_t);
 
+            uint32_t bi = static_cast<uint32_t>(position / block_size);
+            if (size_t pad = position % block_size)
+            {
+                size_t len = std::min(length, block_size - pad);
                 block_t b{};
                 std::memcpy(reinterpret_cast<byte*>(&b) + pad, input, len);
-                process_block(ctx, bi, b);
+                process_block(ctx, bi++, &b, &b);
                 std::memcpy(reinterpret_cast<byte*>(output), reinterpret_cast<byte*>(&b) + pad, len);
+                position += len;
+                input = reinterpret_cast<const byte*>(input) + len;
+                output = reinterpret_cast<byte*>(output) + len;
+                length -= len;
+            }
 
+            while (length >= block_size)
+            {
+                process_block(ctx, bi++, reinterpret_cast<const block_t*>(input), reinterpret_cast<block_t*>(output));
+                position += block_size;
+                input = reinterpret_cast<const byte*>(input) + block_size;
+                output = reinterpret_cast<byte*>(output) + block_size;
+                length -= block_size;
+            }
+
+            if (size_t len = length)
+            {
+                block_t b{};
+                std::memcpy(reinterpret_cast<byte*>(&b), input, len);
+                process_block(ctx, bi++, &b, &b);
+                std::memcpy(reinterpret_cast<byte*>(output), reinterpret_cast<byte*>(&b), len);
                 position += len;
                 input = reinterpret_cast<const byte*>(input) + len;
                 output = reinterpret_cast<byte*>(output) + len;
@@ -104,7 +123,7 @@ namespace chacha20
             return ctx;
         }
 
-        static block_t& process_block(const context_t& ctx, uint32_t counter, block_t& block)
+        static void process_block(const context_t& ctx, uint32_t counter, const block_t* input, block_t* output)
         {
             auto w = ctx.zero;
             w[12] += counter;
@@ -127,9 +146,7 @@ namespace chacha20
             w[12] += counter;
 
             for (int i = 0; i < 16; i++)
-                block[i] ^= w[i];
-
-            return block;
+                output->operator[](i) = input->operator[](i) ^ w[i];
         }
 
         static void process_stream(const context_t& ctx, const void* input, void* output, size_t position, size_t length)
@@ -182,7 +199,7 @@ namespace chacha20
             };
         }
 
-        ARKXMM_API process_block(const context_t& ctx, uint32_t counter, block_t& block) -> block_t&
+        ARKXMM_API process_block(const context_t& ctx, uint32_t counter, const block_t* input, block_t* output)
         {
             block_t w = {ctx.zero, ctx.zero};
             auto k = arkxmm::u32x8(counter * 4, 0, 0, 0);
@@ -222,16 +239,14 @@ namespace chacha20
             w.state0.r3 += k1;
             w.state1.r3 += k2;
 
-            block.state0.r0 ^= arkxmm::permute128<0, 2>(w.state0.r0, w.state0.r1);
-            block.state0.r1 ^= arkxmm::permute128<0, 2>(w.state0.r2, w.state0.r3);
-            block.state0.r2 ^= arkxmm::permute128<1, 3>(w.state0.r0, w.state0.r1);
-            block.state0.r3 ^= arkxmm::permute128<1, 3>(w.state0.r2, w.state0.r3);
-            block.state1.r0 ^= arkxmm::permute128<0, 2>(w.state1.r0, w.state1.r1);
-            block.state1.r1 ^= arkxmm::permute128<0, 2>(w.state1.r2, w.state1.r3);
-            block.state1.r2 ^= arkxmm::permute128<1, 3>(w.state1.r0, w.state1.r1);
-            block.state1.r3 ^= arkxmm::permute128<1, 3>(w.state1.r2, w.state1.r3);
-
-            return block;
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r0, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r0) ^ arkxmm::permute128<0, 2>(w.state0.r0, w.state0.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r1, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r1) ^ arkxmm::permute128<0, 2>(w.state0.r2, w.state0.r3));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r2, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r2) ^ arkxmm::permute128<1, 3>(w.state0.r0, w.state0.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r3, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r3) ^ arkxmm::permute128<1, 3>(w.state0.r2, w.state0.r3));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r0, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r0) ^ arkxmm::permute128<0, 2>(w.state1.r0, w.state1.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r1, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r1) ^ arkxmm::permute128<0, 2>(w.state1.r2, w.state1.r3));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r2, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r2) ^ arkxmm::permute128<1, 3>(w.state1.r0, w.state1.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r3, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r3) ^ arkxmm::permute128<1, 3>(w.state1.r2, w.state1.r3));
         }
 
         static void process_stream(const context_t& ctx, const void* input, void* output, size_t position, size_t length)
