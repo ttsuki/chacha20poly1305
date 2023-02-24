@@ -134,12 +134,7 @@ namespace chacha20
         }
     }
 
-    static void process_stream(
-        const key* key, const nonce* nonce,
-        const void* input, void* output, size_t position, size_t length)
-    {
-        ref::process_stream(
-            ref::prepare_context(key, nonce),
-            input, output, position, length);
-    }
+    using ref::context_t;
+    using ref::prepare_context;
+    using ref::process_stream;
 }

@@ -257,9 +257,13 @@ int main()
         key_stream result{};
 
         if (chacha20::process_stream(
-                reinterpret_cast<const chacha20::key*>(tv.key.data()),
-                reinterpret_cast<const chacha20::nonce*>(tv.nonce.data()),
-                &result, &result, sizeof(result) * tv.block_counter, sizeof(result));
+                chacha20::prepare_context(
+                    reinterpret_cast<const chacha20::key*>(tv.key.data()),
+                    reinterpret_cast<const chacha20::nonce*>(tv.nonce.data())),
+                /*    input */ &result,
+                /*   output */ &result,
+                /* position */ sizeof(result) * tv.block_counter,
+                /*   length */ sizeof(result));
             std::memcmp(result.data(), tv.stream.data(), 64) != 0)
         {
             std::cerr << "BLOCK FUNCTION TEST [" << tv.name << "] FAILED" << "\n";
@@ -271,12 +275,13 @@ int main()
     {
         auto buffer = std::vector<byte>(tv.cipher_text.size(), 0);
         if (chacha20::process_stream(
-                reinterpret_cast<const chacha20::key*>(tv.key.data()),
-                reinterpret_cast<const chacha20::nonce*>(tv.nonce.data()),
-                tv.plain_text.data(),
-                buffer.data(),
-                tv.initial_block_counter * size_t{64},
-                buffer.size());
+                chacha20::prepare_context(
+                    reinterpret_cast<const chacha20::key*>(tv.key.data()),
+                    reinterpret_cast<const chacha20::nonce*>(tv.nonce.data())),
+                /*    input */ tv.plain_text.data(),
+                /*   output */ buffer.data(),
+                /* position */ size_t{64} * tv.initial_block_counter,
+                /*   length */ buffer.size());
             std::memcmp(buffer.data(), tv.cipher_text.data(), tv.cipher_text.size()) != 0)
         {
             std::cerr << "TEST [" << tv.name << "] FAILED" << "\n";
