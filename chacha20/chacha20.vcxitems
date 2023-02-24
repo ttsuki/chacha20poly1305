@@ -15,5 +15,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)chacha20.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)xmm.h" />
   </ItemGroup>
 </Project>
