@@ -14,6 +14,7 @@
     <ProjectCapability Include="SourceItemsFromImports" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)intrinsics.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)poly1305.h" />
   </ItemGroup>
 </Project>
