@@ -10,7 +10,29 @@
 
 #include "./poly1305.h"
 
+#include <type_traits>
+#include <chrono>
+#include <random>
+
 using byte = uint8_t;
+
+static inline std::vector<byte> random_bytes(size_t length)
+{
+    std::vector<byte> plain(length + 7 & ~7);
+    std::independent_bits_engine<std::default_random_engine, 64, uint64_t> generator{};
+    std::generate(
+        reinterpret_cast<uint64_t*>(plain.data()),
+        reinterpret_cast<uint64_t*>(plain.data() + plain.size() / sizeof(uint64_t)),
+        [&generator]() -> uint64_t { return generator(); });
+    plain.resize(length);
+    return plain;
+}
+
+static inline const std::vector<byte>& static_random_bytes_256m()
+{
+    static auto random_bytes_256m = random_bytes(268435456);
+    return random_bytes_256m;
+}
 
 int main()
 {
@@ -261,6 +283,22 @@ int main()
             std::cerr << "TEST(x86) [" << tv.name << "] FAILED" << "\n";
             all_test_is_passed = false;
         }
+    }
+
+    for (int i = 0; i < 10; ++i)
+    {
+        auto start = std::chrono::high_resolution_clock::now();
+        poly1305::calculate_poly1305_x86(reinterpret_cast<const poly1305::key_r*>(test_vectors[0].key.data() + 0), reinterpret_cast<const poly1305::key_s*>(test_vectors[0].key.data() + 16), static_random_bytes_256m().data(), static_random_bytes_256m().size());
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "x86 " << std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count() << "\n";
+    }
+
+    for (int i = 0; i < 10; ++i)
+    {
+        auto start = std::chrono::high_resolution_clock::now();
+        poly1305::calculate_poly1305_x64(reinterpret_cast<const poly1305::key_r*>(test_vectors[0].key.data() + 0), reinterpret_cast<const poly1305::key_s*>(test_vectors[0].key.data() + 16), static_random_bytes_256m().data(), static_random_bytes_256m().size());
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "x64 " << std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count() << "\n";
     }
 
     return all_test_is_passed ? 0 : 1;
