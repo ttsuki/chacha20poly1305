@@ -234,7 +234,7 @@ int main()
     bool all_test_is_passed = true;
     for (auto&& tv : test_vectors)
     {
-        if (auto result = poly1305::calculate_poly1305_x64(
+        if (auto result = poly1305::x64::calculate_poly1305(
                 reinterpret_cast<const poly1305::key_r*>(tv.key.data() + 0),
                 reinterpret_cast<const poly1305::key_s*>(tv.key.data() + 16),
                 tv.text.data(), tv.text.size());
@@ -248,7 +248,7 @@ int main()
             all_test_is_passed = false;
         }
 
-        if (auto result = poly1305::calculate_poly1305_x86(
+        if (auto result = poly1305::x86::calculate_poly1305(
                 reinterpret_cast<const poly1305::key_r*>(tv.key.data() + 0),
                 reinterpret_cast<const poly1305::key_s*>(tv.key.data() + 16),
                 tv.text.data(), tv.text.size());
