@@ -129,9 +129,9 @@ namespace chacha20
 
         template <class chacha_state> ARKXMM_API chacha_single_round(chacha_state s) noexcept -> chacha_state
         {
-            s.r3 = rotl(s.r3 ^= s.r0 += s.r1, 16);
+            s.r3 = byte_rotr2(s.r3 ^= s.r0 += s.r1);
             s.r1 = rotl(s.r1 ^= s.r2 += s.r3, 12);
-            s.r3 = rotl(s.r3 ^= s.r0 += s.r1, 8);
+            s.r3 = byte_rotr3(s.r3 ^= s.r0 += s.r1);
             s.r1 = rotl(s.r1 ^= s.r2 += s.r3, 7);
             return s;
         }

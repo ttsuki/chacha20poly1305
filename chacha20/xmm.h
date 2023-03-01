@@ -1131,12 +1131,37 @@ namespace arkana::xmm
     ARKXMM_API rotr(vu32x8 v, int i) -> vu32x8 { return v >> (i & 31) | v << (-i & 31); }
     ARKXMM_API rotr(vu64x2 v, int i) -> vu64x2 { return v >> (i & 63) | v << (-i & 63); }
     ARKXMM_API rotr(vu64x4 v, int i) -> vu64x4 { return v >> (i & 63) | v << (-i & 63); }
-    ARKXMM_API byteswap(vu16x8 v) -> vu16x8 { return byte_shuffle_128(v, from_values<XMM<int8_t>>(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14)); }
-    ARKXMM_API byteswap(vu16x16 v) -> vu16x16 { return byte_shuffle_128(v, from_values<YMM<int8_t>>(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14, 1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14)); }
-    ARKXMM_API byteswap(vu32x4 v) -> vu32x4 { return byte_shuffle_128(v, from_values<XMM<int8_t>>(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12)); }
-    ARKXMM_API byteswap(vu32x8 v) -> vu32x8 { return byte_shuffle_128(v, from_values<YMM<int8_t>>(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12, 3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12)); }
-    ARKXMM_API byteswap(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<XMM<int8_t>>(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)); }
-    ARKXMM_API byteswap(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<YMM<int8_t>>(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)); }
+    ARKXMM_API byteswap(vu16x8 v) -> vu16x8 { return byte_shuffle_128(v, from_values<vi8x16>(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14)); }
+    ARKXMM_API byteswap(vu16x16 v) -> vu16x16 { return byte_shuffle_128(v, from_values<vi8x32>(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14)); }
+    ARKXMM_API byteswap(vu32x4 v) -> vu32x4 { return byte_shuffle_128(v, from_values<vi8x16>(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12)); }
+    ARKXMM_API byteswap(vu32x8 v) -> vu32x8 { return byte_shuffle_128(v, from_values<vi8x32>(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12)); }
+    ARKXMM_API byteswap(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)); }
+    ARKXMM_API byteswap(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)); }
+
+    ARKXMM_API byte_rotr0(vu32x4 v) -> vu32x4 { return byte_shuffle_128(v, from_values<vi8x16>(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)); }
+    ARKXMM_API byte_rotr1(vu32x4 v) -> vu32x4 { return byte_shuffle_128(v, from_values<vi8x16>(1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12)); }
+    ARKXMM_API byte_rotr2(vu32x4 v) -> vu32x4 { return byte_shuffle_128(v, from_values<vi8x16>(2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13)); }
+    ARKXMM_API byte_rotr3(vu32x4 v) -> vu32x4 { return byte_shuffle_128(v, from_values<vi8x16>(3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14)); }
+    ARKXMM_API byte_rotr0(vu32x8 v) -> vu32x8 { return byte_shuffle_128(v, from_values<vi8x32>(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)); }
+    ARKXMM_API byte_rotr1(vu32x8 v) -> vu32x8 { return byte_shuffle_128(v, from_values<vi8x32>(1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12)); }
+    ARKXMM_API byte_rotr2(vu32x8 v) -> vu32x8 { return byte_shuffle_128(v, from_values<vi8x32>(2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13)); }
+    ARKXMM_API byte_rotr3(vu32x8 v) -> vu32x8 { return byte_shuffle_128(v, from_values<vi8x32>(3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14)); }
+    ARKXMM_API byte_rotr0(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)); }
+    ARKXMM_API byte_rotr1(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(1, 2, 3, 4, 5, 6, 7, 0, 9, 10, 11, 12, 13, 14, 15, 8)); }
+    ARKXMM_API byte_rotr2(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(2, 3, 4, 5, 6, 7, 0, 1, 10, 11, 12, 13, 14, 15, 8, 9)); }
+    ARKXMM_API byte_rotr3(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(3, 4, 5, 6, 7, 0, 1, 2, 11, 12, 13, 14, 15, 8, 9, 10)); }
+    ARKXMM_API byte_rotr4(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(4, 5, 6, 7, 0, 1, 2, 3, 12, 13, 14, 15, 8, 9, 10, 11)); }
+    ARKXMM_API byte_rotr5(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(5, 6, 7, 0, 1, 2, 3, 4, 13, 14, 15, 8, 9, 10, 11, 12)); }
+    ARKXMM_API byte_rotr6(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(6, 7, 0, 1, 2, 3, 4, 5, 14, 15, 8, 9, 10, 11, 12, 13)); }
+    ARKXMM_API byte_rotr7(vu64x2 v) -> vu64x2 { return byte_shuffle_128(v, from_values<vi8x16>(7, 0, 1, 2, 3, 4, 5, 6, 15, 8, 9, 10, 11, 12, 13, 14)); }
+    ARKXMM_API byte_rotr0(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)); }
+    ARKXMM_API byte_rotr1(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(1, 2, 3, 4, 5, 6, 7, 0, 9, 10, 11, 12, 13, 14, 15, 8)); }
+    ARKXMM_API byte_rotr2(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(2, 3, 4, 5, 6, 7, 0, 1, 10, 11, 12, 13, 14, 15, 8, 9)); }
+    ARKXMM_API byte_rotr3(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(3, 4, 5, 6, 7, 0, 1, 2, 11, 12, 13, 14, 15, 8, 9, 10)); }
+    ARKXMM_API byte_rotr4(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(4, 5, 6, 7, 0, 1, 2, 3, 12, 13, 14, 15, 8, 9, 10, 11)); }
+    ARKXMM_API byte_rotr5(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(5, 6, 7, 0, 1, 2, 3, 4, 13, 14, 15, 8, 9, 10, 11, 12)); }
+    ARKXMM_API byte_rotr6(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(6, 7, 0, 1, 2, 3, 4, 5, 14, 15, 8, 9, 10, 11, 12, 13)); }
+    ARKXMM_API byte_rotr7(vu64x4 v) -> vu64x4 { return byte_shuffle_128(v, from_values<vi8x32>(7, 0, 1, 2, 3, 4, 5, 6, 15, 8, 9, 10, 11, 12, 13, 14)); }
 
     template <class XMM>
     ARKXMM_API transpose_32x4x4(
