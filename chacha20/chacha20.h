@@ -10,11 +10,12 @@
 #include <type_traits>
 #include <array>
 
-#if defined(_MSC_VER)
-#include <intrin.h>
-#else
-#include <x86intrin.h>
+#ifdef __RESHARPER__
+#define __AVX2__
 #endif
+
+#include "./intrinsics.h"
+#include "./ctr_cipher_stream_helper.h"
 
 #ifdef __AVX2__
 #include "./xmm.h"
@@ -25,83 +26,40 @@ namespace chacha20
     using byte = uint8_t;
     using key = std::array<byte, 32>;
     using nonce = std::array<byte, 12>;
+    using position_t = uint64_t; // max 256 GiB
+    using counter_t = uint32_t;
 
-    namespace impl
+    // private impl
+    namespace common::impl
     {
-        namespace intrinsics
-        {
-#if defined(_MSC_VER)
-            static inline uint32_t rotl(uint32_t v, int i) noexcept { return ::_rotl(v, i); }
-#elif defined(__clang__)
-            static inline uint32_t rotl(uint32_t v, int i) noexcept { return ::__builtin_rotateleft32(v, static_cast<unsigned char>(i)); }
-#elif defined(__GNUC__)
-            static inline uint32_t rotl(uint32_t v, int i) noexcept { return ::__rold(v, i); }
-#else
-            static inline constexpr uint16_t rotl(uint16_t v, int i) noexcept { return static_cast<uint16_t>(v << (i & 15) | v >> (-i & 15)); }
-#endif
-        }
-
         template <class uint32_t>
-        static inline void quarter_round(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d)
+        static ARKANA_FORCEINLINE void quarter_round(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d)
         {
-            using intrinsics::rotl;
-            a += b;
-            d ^= a;
-            d = rotl(d, 16);
-            c += d;
-            b ^= c;
-            b = rotl(b, 12);
-            a += b;
-            d ^= a;
-            d = rotl(d, 8);
-            c += d;
-            b ^= c;
-            b = rotl(b, 7);
+            using arkintr::rotl;
+            d = rotl(d ^= a += b, 16);
+            b = rotl(b ^= c += d, 12);
+            d = rotl(d ^= a += b, 8);
+            b = rotl(b ^= c += d, 7);
         }
 
         template <class context_t, class block_t>
-        static void process_stream(context_t& ctx, const void* input, void* output, size_t position, size_t length)
+        static void process_stream(const context_t& ctx, const void* input, void* output, position_t position, size_t length)
         {
-            constexpr size_t block_size = sizeof(block_t);
-
-            uint32_t bi = static_cast<uint32_t>(position / block_size);
-            if (size_t pad = position % block_size)
-            {
-                size_t len = std::min(length, block_size - pad);
-                block_t b{};
-                std::memcpy(reinterpret_cast<byte*>(&b) + pad, input, len);
-                process_block(ctx, bi++, &b, &b);
-                std::memcpy(reinterpret_cast<byte*>(output), reinterpret_cast<byte*>(&b) + pad, len);
-                position += len;
-                input = reinterpret_cast<const byte*>(input) + len;
-                output = reinterpret_cast<byte*>(output) + len;
-                length -= len;
-            }
-
-            while (length >= block_size)
-            {
-                process_block(ctx, bi++, reinterpret_cast<const block_t*>(input), reinterpret_cast<block_t*>(output));
-                position += block_size;
-                input = reinterpret_cast<const byte*>(input) + block_size;
-                output = reinterpret_cast<byte*>(output) + block_size;
-                length -= block_size;
-            }
-
-            if (size_t len = length)
-            {
-                block_t b{};
-                std::memcpy(reinterpret_cast<byte*>(&b), input, len);
-                process_block(ctx, bi++, &b, &b);
-                std::memcpy(reinterpret_cast<byte*>(output), reinterpret_cast<byte*>(&b), len);
-                position += len;
-                input = reinterpret_cast<const byte*>(input) + len;
-                output = reinterpret_cast<byte*>(output) + len;
-                length -= len;
-            }
+            return arkana::ctr_cipher_stream_helper::process_stream_with_ctr<block_t, counter_t, position_t>(
+                [](const context_t& ctx, const block_t* input, block_t* output, counter_t counter, size_t block_count)
+                {
+                    for (size_t i = 0; i < block_count; ++i, ++counter, ++input, ++output)
+                        process_block(ctx, counter, input, output); // ADL
+                },
+                ctx,
+                static_cast<const std::byte*>(input),
+                static_cast<std::byte*>(output),
+                position, length);
         }
     }
 
-    namespace ref
+    // private impl
+    namespace ref::impl
     {
         using chacha_state = std::array<uint32_t, 16>;
 
@@ -112,7 +70,7 @@ namespace chacha20
             chacha_state zero;
         };
 
-        static context_t prepare_context(const key* key, const nonce* nonce, uint32_t initial_counter = 0)
+        static context_t prepare_context(const key* key, const nonce* nonce, counter_t initial_counter = 0)
         {
             context_t ctx{};
             constexpr std::array<uint32_t, 4> k = {0x61707865, 0x3320646e, 0x79622d32, 0x6b206574,};
@@ -123,21 +81,22 @@ namespace chacha20
             return ctx;
         }
 
-        static void process_block(const context_t& ctx, uint32_t counter, const block_t* input, block_t* output)
+        static ARKANA_FORCEINLINE void process_block(const context_t& ctx, counter_t counter, const block_t* input, block_t* output)
         {
             auto w = ctx.zero;
             w[12] += counter;
 
             for (int j = 0; j < 10; ++j)
             {
-                impl::quarter_round(w[0], w[4], w[8], w[12]);
-                impl::quarter_round(w[1], w[5], w[9], w[13]);
-                impl::quarter_round(w[2], w[6], w[10], w[14]);
-                impl::quarter_round(w[3], w[7], w[11], w[15]);
-                impl::quarter_round(w[0], w[5], w[10], w[15]);
-                impl::quarter_round(w[1], w[6], w[11], w[12]);
-                impl::quarter_round(w[2], w[7], w[8], w[13]);
-                impl::quarter_round(w[3], w[4], w[9], w[14]);
+                using common::impl::quarter_round;
+                quarter_round(w[0], w[4], w[8], w[12]);
+                quarter_round(w[1], w[5], w[9], w[13]);
+                quarter_round(w[2], w[6], w[10], w[14]);
+                quarter_round(w[3], w[7], w[11], w[15]);
+                quarter_round(w[0], w[5], w[10], w[15]);
+                quarter_round(w[1], w[6], w[11], w[12]);
+                quarter_round(w[2], w[7], w[8], w[13]);
+                quarter_round(w[3], w[4], w[9], w[14]);
             }
 
             for (int j = 0; j < 16; ++j)
@@ -149,17 +108,74 @@ namespace chacha20
                 output->operator[](i) = input->operator[](i) ^ w[i];
         }
 
-        static void process_stream(const context_t& ctx, const void* input, void* output, size_t position, size_t length)
+        static void process_stream(const context_t& ctx, const void* input, void* output, position_t position, size_t length)
         {
-            return impl::process_stream<const context_t, block_t>(ctx, input, output, position, length);
+            return common::impl::process_stream<const context_t, block_t>(ctx, input, output, position, length);
         }
     }
 
 #ifdef __AVX2__
-    namespace avx2
+    // private impl
+    namespace avx2::impl
     {
+        struct chacha_state
+        {
+            // sse
+            arkxmm::vu32x4 r0;
+            arkxmm::vu32x4 r1;
+            arkxmm::vu32x4 r2;
+            arkxmm::vu32x4 r3;
+        };
+
+        template <class chacha_state> ARKXMM_API chacha_single_round(chacha_state s) noexcept -> chacha_state
+        {
+            s.r3 = rotl(s.r3 ^= s.r0 += s.r1, 16);
+            s.r1 = rotl(s.r1 ^= s.r2 += s.r3, 12);
+            s.r3 = rotl(s.r3 ^= s.r0 += s.r1, 8);
+            s.r1 = rotl(s.r1 ^= s.r2 += s.r3, 7);
+            return s;
+        }
+
+        template <class chacha_state> ARKXMM_API chacha_shuffle_a(chacha_state s) noexcept -> chacha_state
+        {
+            s.r1 = arkxmm::shuffle<1, 2, 3, 0>(s.r1);
+            s.r2 = arkxmm::shuffle<2, 3, 0, 1>(s.r2);
+            s.r3 = arkxmm::shuffle<3, 0, 1, 2>(s.r3);
+            return s;
+        }
+
+        template <class chacha_state> ARKXMM_API chacha_shuffle_b(chacha_state s) noexcept -> chacha_state
+        {
+            s.r1 = arkxmm::shuffle<3, 0, 1, 2>(s.r1);
+            s.r2 = arkxmm::shuffle<2, 3, 0, 1>(s.r2);
+            s.r3 = arkxmm::shuffle<1, 2, 3, 0>(s.r3);
+            return s;
+        }
+
+        template <class chacha_state> ARKXMM_API chacha_double_round(chacha_state& s) noexcept
+        {
+            s = chacha_single_round(s);
+            s = chacha_shuffle_a(s);
+            s = chacha_single_round(s);
+            s = chacha_shuffle_b(s);
+        }
+
+        template <class chacha_state> ARKXMM_API chacha_double_round_parallel(chacha_state& s0, chacha_state& s1) noexcept
+        {
+            s0 = chacha_single_round(s0);
+            s1 = chacha_single_round(s1);
+            s0 = chacha_shuffle_a(s0);
+            s1 = chacha_shuffle_a(s1);
+
+            s0 = chacha_single_round(s0);
+            s1 = chacha_single_round(s1);
+            s0 = chacha_shuffle_b(s0);
+            s1 = chacha_shuffle_b(s1);
+        }
+
         struct chacha_state2x
         {
+            // avx
             arkxmm::vu32x8 r0;
             arkxmm::vu32x8 r1;
             arkxmm::vu32x8 r2;
@@ -178,82 +194,84 @@ namespace chacha20
             chacha_state2x zero;
         };
 
-        static context_t prepare_context(const key* key, const nonce* nonce, uint32_t initial_counter = 0)
+        static context_t prepare_context(const key* key, const nonce* nonce, counter_t initial_counter = 0)
         {
-            arkxmm::vu32x4 r0 = arkxmm::u32x4(0x61707865, 0x3320646e, 0x79622d32, 0x6b206574);
-            arkxmm::vu32x4 r1 = arkxmm::load_u<arkxmm::vu32x4>(key->data() + 0);
-            arkxmm::vu32x4 r2 = arkxmm::load_u<arkxmm::vu32x4>(key->data() + 16);
-            arkxmm::vu32x4 r3 = arkxmm::u32x4(
-                initial_counter,
-                reinterpret_cast<const uint32_t*>(nonce)[0],
-                reinterpret_cast<const uint32_t*>(nonce)[1],
-                reinterpret_cast<const uint32_t*>(nonce)[2]);
-
-            return context_t{
-                {
-                    arkxmm::u32x8(r0),
-                    arkxmm::u32x8(r1),
-                    arkxmm::u32x8(r2),
-                    arkxmm::u32x8(r3),
-                }
+            chacha_state state = {
+                arkxmm::u32x4(0x61707865, 0x3320646e, 0x79622d32, 0x6b206574),
+                arkxmm::load_u<arkxmm::vu32x4>(key->data() + 0),
+                arkxmm::load_u<arkxmm::vu32x4>(key->data() + 16),
+                arkxmm::u32x4(
+                    initial_counter,
+                    reinterpret_cast<const uint32_t*>(nonce)[0],
+                    reinterpret_cast<const uint32_t*>(nonce)[1],
+                    reinterpret_cast<const uint32_t*>(nonce)[2]),
             };
+
+            chacha_state2x state2x{u32x8(state.r0), u32x8(state.r1), u32x8(state.r2), u32x8(state.r3)};
+            return context_t{state2x};
         }
 
-        ARKXMM_API process_block(const context_t& ctx, uint32_t counter, const block_t* input, block_t* output)
+        ARKXMM_API process_block(const context_t& ctx, uint32_t counter, const block_t* input, block_t* output) noexcept
         {
-            block_t w = {ctx.zero, ctx.zero};
+            auto s0 = ctx.zero;
+            auto s1 = ctx.zero;
+
             auto k = arkxmm::u32x8(counter * 4, 0, 0, 0);
-            auto k1 = k + arkxmm::u32x8(0, 0, 0, 0, 1, 0, 0, 0);
-            auto k2 = k + arkxmm::u32x8(2, 0, 0, 0, 3, 0, 0, 0);
-            w.state0.r3 += k1;
-            w.state1.r3 += k2;
+            auto init_s0r3 = s0.r3 += k + arkxmm::u32x8(0, 0, 0, 0, 1, 0, 0, 0);
+            auto init_s1r3 = s1.r3 += k + arkxmm::u32x8(2, 0, 0, 0, 3, 0, 0, 0);
 
-            for (int j = 0; j < 10; ++j)
-            {
-                impl::quarter_round(w.state0.r0, w.state0.r1, w.state0.r2, w.state0.r3);
-                impl::quarter_round(w.state1.r0, w.state1.r1, w.state1.r2, w.state1.r3);
-                w.state0.r1 = arkxmm::shuffle<1, 2, 3, 0>(w.state0.r1);
-                w.state0.r2 = arkxmm::shuffle<2, 3, 0, 1>(w.state0.r2);
-                w.state0.r3 = arkxmm::shuffle<3, 0, 1, 2>(w.state0.r3);
-                w.state1.r1 = arkxmm::shuffle<1, 2, 3, 0>(w.state1.r1);
-                w.state1.r2 = arkxmm::shuffle<2, 3, 0, 1>(w.state1.r2);
-                w.state1.r3 = arkxmm::shuffle<3, 0, 1, 2>(w.state1.r3);
-                impl::quarter_round(w.state0.r0, w.state0.r1, w.state0.r2, w.state0.r3);
-                impl::quarter_round(w.state1.r0, w.state1.r1, w.state1.r2, w.state1.r3);
-                w.state0.r1 = arkxmm::shuffle<3, 0, 1, 2>(w.state0.r1);
-                w.state0.r2 = arkxmm::shuffle<2, 3, 0, 1>(w.state0.r2);
-                w.state0.r3 = arkxmm::shuffle<1, 2, 3, 0>(w.state0.r3);
-                w.state1.r1 = arkxmm::shuffle<3, 0, 1, 2>(w.state1.r1);
-                w.state1.r2 = arkxmm::shuffle<2, 3, 0, 1>(w.state1.r2);
-                w.state1.r3 = arkxmm::shuffle<1, 2, 3, 0>(w.state1.r3);
-            }
+            // manual unrolling for msvc x86
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
+            chacha_double_round_parallel(s0, s1);
 
-            w.state0.r0 += ctx.zero.r0;
-            w.state0.r1 += ctx.zero.r1;
-            w.state0.r2 += ctx.zero.r2;
-            w.state0.r3 += ctx.zero.r3;
-            w.state1.r0 += ctx.zero.r0;
-            w.state1.r1 += ctx.zero.r1;
-            w.state1.r2 += ctx.zero.r2;
-            w.state1.r3 += ctx.zero.r3;
-            w.state0.r3 += k1;
-            w.state1.r3 += k2;
+            s0.r0 += ctx.zero.r0;
+            s0.r1 += ctx.zero.r1;
+            s0.r2 += ctx.zero.r2;
+            s0.r3 += init_s0r3;
 
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r0, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r0) ^ arkxmm::permute128<0, 2>(w.state0.r0, w.state0.r1));
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r1, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r1) ^ arkxmm::permute128<0, 2>(w.state0.r2, w.state0.r3));
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r2, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r2) ^ arkxmm::permute128<1, 3>(w.state0.r0, w.state0.r1));
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r3, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r3) ^ arkxmm::permute128<1, 3>(w.state0.r2, w.state0.r3));
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r0, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r0) ^ arkxmm::permute128<0, 2>(w.state1.r0, w.state1.r1));
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r1, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r1) ^ arkxmm::permute128<0, 2>(w.state1.r2, w.state1.r3));
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r2, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r2) ^ arkxmm::permute128<1, 3>(w.state1.r0, w.state1.r1));
-            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r3, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r3) ^ arkxmm::permute128<1, 3>(w.state1.r2, w.state1.r3));
+            s1.r0 += ctx.zero.r0;
+            s1.r1 += ctx.zero.r1;
+            s1.r2 += ctx.zero.r2;
+            s1.r3 += init_s1r3;
+
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r0, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r0) ^ arkxmm::permute128<0, 2>(s0.r0, s0.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r1, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r1) ^ arkxmm::permute128<0, 2>(s0.r2, s0.r3));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r2, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r2) ^ arkxmm::permute128<1, 3>(s0.r0, s0.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state0.r3, arkxmm::load_u<arkxmm::vu32x8>(&input->state0.r3) ^ arkxmm::permute128<1, 3>(s0.r2, s0.r3));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r0, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r0) ^ arkxmm::permute128<0, 2>(s1.r0, s1.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r1, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r1) ^ arkxmm::permute128<0, 2>(s1.r2, s1.r3));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r2, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r2) ^ arkxmm::permute128<1, 3>(s1.r0, s1.r1));
+            arkxmm::store_u<arkxmm::vu32x8>(&output->state1.r3, arkxmm::load_u<arkxmm::vu32x8>(&input->state1.r3) ^ arkxmm::permute128<1, 3>(s1.r2, s1.r3));
         }
 
-        static void process_stream(const context_t& ctx, const void* input, void* output, size_t position, size_t length)
+        static void process_stream(const context_t& ctx, const void* input, void* output, position_t position, size_t length)
         {
-            static_assert(sizeof block_t == 256);
-            return impl::process_stream<const context_t, block_t>(ctx, input, output, position, length);
+            return common::impl::process_stream<const context_t, block_t>(ctx, input, output, position, length);
         }
+    }
+#endif
+
+    namespace ref
+    {
+        using impl::context_t;
+        using impl::prepare_context;
+        using impl::process_stream;
+    }
+
+#ifdef __AVX2__
+    namespace avx2
+    {
+        using impl::context_t;
+        using impl::prepare_context;
+        using impl::process_stream;
     }
 #endif
 
