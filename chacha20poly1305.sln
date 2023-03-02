@@ -13,6 +13,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "chacha20_test", "chacha20\c
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ark", "ark\ark.vcxitems", "{6A632340-30DB-438B-804D-43D729549E02}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "aead_chacha20_poly1305", "aead_chacha20_poly1305\aead_chacha20_poly1305.vcxitems", "{305F76D1-6B10-4052-9ABE-C579DC58B77B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "aead_chacha20_poly1305_test", "aead_chacha20_poly1305\aead_chacha20_poly1305_test.vcxproj", "{E968675E-BC7D-425F-9ED6-537E7E9F968C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -37,6 +41,14 @@ Global
 		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Release|x64.Build.0 = Release|x64
 		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Release|x86.ActiveCfg = Release|Win32
 		{730D510D-F25D-41AC-B93D-7E1B9817694E}.Release|x86.Build.0 = Release|Win32
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Debug|x64.ActiveCfg = Debug|x64
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Debug|x64.Build.0 = Debug|x64
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Debug|x86.ActiveCfg = Debug|Win32
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Debug|x86.Build.0 = Debug|Win32
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Release|x64.ActiveCfg = Release|x64
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Release|x64.Build.0 = Release|x64
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Release|x86.ActiveCfg = Release|Win32
+		{E968675E-BC7D-425F-9ED6-537E7E9F968C}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -45,10 +57,14 @@ Global
 		SolutionGuid = {E041FA79-90DC-4F2F-9AA8-8AE6AB689813}
 	EndGlobalSection
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		aead_chacha20_poly1305\aead_chacha20_poly1305.vcxitems*{305f76d1-6b10-4052-9abe-c579dc58b77b}*SharedItemsImports = 9
 		poly1305\poly1305.vcxitems*{598b9bad-e3d9-4964-82d2-745fca9b105d}*SharedItemsImports = 4
 		ark\ark.vcxitems*{6a632340-30db-438b-804d-43d729549e02}*SharedItemsImports = 9
 		chacha20\chacha20.vcxitems*{730d510d-f25d-41ac-b93d-7e1b9817694e}*SharedItemsImports = 4
 		poly1305\poly1305.vcxitems*{865de0d2-c0ba-46b8-9c9a-613ce0df6bf1}*SharedItemsImports = 9
 		chacha20\chacha20.vcxitems*{d9b01530-0d48-4bf4-83db-e214fc6cd4af}*SharedItemsImports = 9
+		aead_chacha20_poly1305\aead_chacha20_poly1305.vcxitems*{e968675e-bc7d-425f-9ed6-537e7e9f968c}*SharedItemsImports = 4
+		chacha20\chacha20.vcxitems*{e968675e-bc7d-425f-9ed6-537e7e9f968c}*SharedItemsImports = 4
+		poly1305\poly1305.vcxitems*{e968675e-bc7d-425f-9ed6-537e7e9f968c}*SharedItemsImports = 4
 	EndGlobalSection
 EndGlobal
