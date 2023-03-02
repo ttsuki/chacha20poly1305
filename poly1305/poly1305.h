@@ -9,8 +9,8 @@
 #include <cstring>
 #include <array>
 
-#include "./intrinsics.h"
-#include "message_digest_helper.h"
+#include "../ark/intrinsics.h"
+#include "../ark/message_digest_helper.h"
 
 namespace poly1305
 {

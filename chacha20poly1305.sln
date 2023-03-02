@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "chacha20", "chacha20\chacha
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "chacha20_test", "chacha20\chacha20_test.vcxproj", "{730D510D-F25D-41AC-B93D-7E1B9817694E}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ark", "ark\ark.vcxitems", "{6A632340-30DB-438B-804D-43D729549E02}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -44,6 +46,7 @@ Global
 	EndGlobalSection
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		poly1305\poly1305.vcxitems*{598b9bad-e3d9-4964-82d2-745fca9b105d}*SharedItemsImports = 4
+		ark\ark.vcxitems*{6a632340-30db-438b-804d-43d729549e02}*SharedItemsImports = 9
 		chacha20\chacha20.vcxitems*{730d510d-f25d-41ac-b93d-7e1b9817694e}*SharedItemsImports = 4
 		poly1305\poly1305.vcxitems*{865de0d2-c0ba-46b8-9c9a-613ce0df6bf1}*SharedItemsImports = 9
 		chacha20\chacha20.vcxitems*{d9b01530-0d48-4bf4-83db-e214fc6cd4af}*SharedItemsImports = 9

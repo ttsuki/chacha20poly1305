@@ -14,11 +14,11 @@
 #define __AVX2__
 #endif
 
-#include "./intrinsics.h"
-#include "./ctr_cipher_stream_helper.h"
+#include "../ark/intrinsics.h"
+#include "../ark/ctr_cipher_stream_helper.h"
 
 #ifdef __AVX2__
-#include "./xmm.h"
+#include "../ark/xmm.h"
 #endif
 
 namespace chacha20

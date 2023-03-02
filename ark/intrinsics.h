@@ -6,6 +6,8 @@
 /// https://opensource.org/licenses/MIT
 
 #pragma once
+#ifndef ARKANA_ARK_INTRINSICS_INCLUDED
+#define ARKANA_ARK_INTRINSICS_INCLUDED
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -438,3 +440,5 @@ namespace arkbit
 {
     using namespace arkana::bit;
 }
+
+#endif
